@@ -694,14 +694,12 @@ pub(crate) async fn apply_bespoke_event_handling(
         EventMsg::ThreadRollback(_rollback_event) => {
             let pending = {
                 let mut map = pending_rollbacks.lock().await;
-                map.remove(&conversation_id).unwrap_or_default()
+                map.remove(&conversation_id)
             };
 
-            for (rid, ver) in pending {
+            if let Some((rid, ver)) = pending {
                 match ver {
-                    ApiVersion::V2 => {
-                        outgoing.send_response(rid, ThreadRollbackResponse {}).await;
-                    }
+                    ApiVersion::V2 => outgoing.send_response(rid, ThreadRollbackResponse {}).await,
                     ApiVersion::V1 => {
                         // No v1 API for rollback; ignore.
                     }

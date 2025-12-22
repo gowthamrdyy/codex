@@ -449,27 +449,52 @@ mod tests {
                 message: "A2".into(),
             }),
             EventMsg::ThreadRollback(ThreadRollbackEvent { num_turns: 1 }),
+            EventMsg::UserMessage(UserMessageEvent {
+                message: "Third".into(),
+                images: None,
+            }),
+            EventMsg::AgentMessage(AgentMessageEvent {
+                message: "A3".into(),
+            }),
         ];
 
         let turns = build_turns_from_event_msgs(&events);
-        let expected = vec![Turn {
-            id: "turn-1".into(),
-            status: TurnStatus::Completed,
-            error: None,
-            items: vec![
-                ThreadItem::UserMessage {
-                    id: "item-1".into(),
-                    content: vec![UserInput::Text {
-                        text: "First".into(),
-                    }],
-                },
-                ThreadItem::AgentMessage {
-                    id: "item-2".into(),
-                    text: "A1".into(),
-                },
-            ],
-        }];
-
+        let expected = vec![
+            Turn {
+                id: "turn-1".into(),
+                status: TurnStatus::Completed,
+                error: None,
+                items: vec![
+                    ThreadItem::UserMessage {
+                        id: "item-1".into(),
+                        content: vec![UserInput::Text {
+                            text: "First".into(),
+                        }],
+                    },
+                    ThreadItem::AgentMessage {
+                        id: "item-2".into(),
+                        text: "A1".into(),
+                    },
+                ],
+            },
+            Turn {
+                id: "turn-2".into(),
+                status: TurnStatus::Completed,
+                error: None,
+                items: vec![
+                    ThreadItem::UserMessage {
+                        id: "item-3".into(),
+                        content: vec![UserInput::Text {
+                            text: "Third".into(),
+                        }],
+                    },
+                    ThreadItem::AgentMessage {
+                        id: "item-4".into(),
+                        text: "A3".into(),
+                    },
+                ],
+            },
+        ];
         assert_eq!(turns, expected);
     }
 }

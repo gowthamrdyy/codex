@@ -178,8 +178,7 @@ use uuid::Uuid;
 
 type PendingInterruptQueue = Vec<(RequestId, ApiVersion)>;
 pub(crate) type PendingInterrupts = Arc<Mutex<HashMap<ConversationId, PendingInterruptQueue>>>;
-type PendingRollbackQueue = Vec<(RequestId, ApiVersion)>;
-pub(crate) type PendingRollbacks = Arc<Mutex<HashMap<ConversationId, PendingRollbackQueue>>>;
+pub(crate) type PendingRollbacks = Arc<Mutex<HashMap<ConversationId, (RequestId, ApiVersion)>>>;
 
 /// Per-conversation accumulation of the latest states e.g. error message while a turn runs.
 #[derive(Default, Clone)]
@@ -1538,12 +1537,26 @@ impl CodexMessageProcessor {
 
         {
             let mut map = self.pending_rollbacks.lock().await;
-            map.entry(conversation_id)
-                .or_default()
-                .push((request_id, ApiVersion::V2));
+            if map.contains_key(&conversation_id) {
+                self.send_invalid_request_error(
+                    request_id,
+                    "rollback already in progress for this thread".to_string(),
+                )
+                .await;
+                return;
+            }
+
+            map.insert(conversation_id, (request_id.clone(), ApiVersion::V2));
         }
 
-        let _ = conversation.submit(Op::ThreadRollback { num_turns }).await;
+        if let Err(err) = conversation.submit(Op::ThreadRollback { num_turns }).await {
+            // No ThreadRollback event will arrive; clean up and reply immediately.
+            let mut map = self.pending_rollbacks.lock().await;
+            map.remove(&conversation_id);
+
+            self.send_internal_error(request_id, format!("failed to start rollback: {err}"))
+                .await;
+        }
     }
 
     async fn thread_list(&self, request_id: RequestId, params: ThreadListParams) {
