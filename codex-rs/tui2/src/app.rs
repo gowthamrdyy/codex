@@ -20,6 +20,7 @@ use crate::resume_picker::ResumeSelection;
 use crate::transcript_copy_ui::TranscriptCopyUi;
 use crate::transcript_multi_click::TranscriptMultiClick;
 use crate::transcript_scrollbar::render_transcript_scrollbar_if_active;
+use crate::transcript_scrollbar::split_transcript_area;
 use crate::transcript_selection::TRANSCRIPT_GUTTER_COLS;
 use crate::transcript_selection::TranscriptSelection;
 use crate::transcript_selection::TranscriptSelectionPoint;
@@ -703,18 +704,19 @@ impl App {
             return area.y;
         }
 
-        let transcript_area = Rect {
+        let transcript_full_area = Rect {
             x: area.x,
             y: area.y,
             width: area.width,
             height: max_transcript_height,
         };
+        let (transcript_area, _) = split_transcript_area(transcript_full_area);
 
         self.transcript_view_cache
             .ensure_wrapped(cells, transcript_area.width);
         let total_lines = self.transcript_view_cache.lines().len();
         if total_lines == 0 {
-            Clear.render_ref(transcript_area, frame.buffer);
+            Clear.render_ref(transcript_full_area, frame.buffer);
             self.transcript_scroll = TranscriptScroll::default();
             self.transcript_view_top = 0;
             self.transcript_total_lines = 0;
@@ -755,12 +757,14 @@ impl App {
             );
         }
 
-        let transcript_area = Rect {
+        let transcript_full_area = Rect {
             x: area.x,
             y: area.y,
             width: area.width,
             height: transcript_visible_height,
         };
+        let (transcript_area, transcript_scrollbar_area) =
+            split_transcript_area(transcript_full_area);
 
         // Cache a few viewports worth of rasterized rows so redraws during streaming can cheaply
         // copy already-rendered `Cell`s instead of re-running grapheme segmentation.
@@ -803,7 +807,7 @@ impl App {
         }
         render_transcript_scrollbar_if_active(
             frame.buffer,
-            transcript_area,
+            transcript_scrollbar_area,
             total_lines,
             max_visible,
             top_offset,
@@ -856,12 +860,13 @@ impl App {
             return;
         }
 
-        let transcript_area = Rect {
+        let transcript_full_area = Rect {
             x: 0,
             y: 0,
             width,
             height: transcript_height,
         };
+        let (transcript_area, _) = split_transcript_area(transcript_full_area);
         let base_x = transcript_area.x.saturating_add(TRANSCRIPT_GUTTER_COLS);
         let max_x = transcript_area.right().saturating_sub(1);
 
@@ -870,7 +875,9 @@ impl App {
         // This prevents clicks in the composer/footer from starting or extending a transcript
         // selection, while still allowing a left-click outside the transcript to clear an
         // existing highlight.
-        if mouse_event.row < transcript_area.y || mouse_event.row >= transcript_area.bottom() {
+        if mouse_event.row < transcript_full_area.y
+            || mouse_event.row >= transcript_full_area.bottom()
+        {
             if matches!(
                 mouse_event.kind,
                 MouseEventKind::Down(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left)
@@ -1077,7 +1084,15 @@ impl App {
             return None;
         }
 
-        Some((transcript_height as usize, width))
+        let transcript_full_area = Rect {
+            x: 0,
+            y: 0,
+            width,
+            height: transcript_height,
+        };
+        let (transcript_area, _) = split_transcript_area(transcript_full_area);
+
+        Some((transcript_height as usize, transcript_area.width))
     }
 
     /// Scroll the transcript by a number of visual lines.
@@ -1277,10 +1292,18 @@ impl App {
             return;
         }
 
+        let transcript_full_area = Rect {
+            x: 0,
+            y: 0,
+            width,
+            height: transcript_height,
+        };
+        let (transcript_area, _) = split_transcript_area(transcript_full_area);
+
         let Some(text) = crate::transcript_copy::selection_to_copy_text_for_cells(
             &self.transcript_cells,
             self.transcript_selection,
-            width,
+            transcript_area.width,
         ) else {
             return;
         };
